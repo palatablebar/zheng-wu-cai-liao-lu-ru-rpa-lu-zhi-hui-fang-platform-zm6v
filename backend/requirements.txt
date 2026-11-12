@@ -14,3 +14,5 @@ kombu==5.4.0
 redis==5.2.1
 alembic==1.14.0
 python-dateutil==2.9.0.post0
+# 测试：FastAPI TestClient（tests/ 下 SQLite 内存库集成测试）
+httpx==0.28.1

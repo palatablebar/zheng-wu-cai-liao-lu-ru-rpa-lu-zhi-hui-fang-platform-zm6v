@@ -5,7 +5,7 @@ from src.models.material import Material
 from src.models.process import Process
 from src.models.run import Run
 from src.models.run_step import RunStep
-from src.models.step import Step
+from src.services import version_service
 from src.services.serializers import run_out
 
 
@@ -13,7 +13,8 @@ def board_snapshot(db) -> dict:
     runs = db.scalars(select(Run).order_by(Run.id.desc()).limit(60)).all()
     process_map = {p.id: p for p in db.scalars(select(Process)).all()}
     material_map = {m.id: m for m in db.scalars(select(Material)).all()}
-    step_map = {s.id: s for s in db.scalars(select(Step)).all()}
+    # 每个运行按其启动时绑定的版本解析步骤（版本化运行取快照，历史运行回退工作区表）
+    step_maps_by_run = {run.id: version_service.step_view_map_for_run(db, run) for run in runs}
 
     active_runs = [run for run in runs if run.status in (RunStatus.RUNNING.value, RunStatus.TAKEOVER.value)]
     run_steps = []
@@ -35,6 +36,11 @@ def board_snapshot(db) -> dict:
         data["company_name"] = material.company_name if material else ""
         data["credit_code"] = material.credit_code if material else ""
         items = steps_by_run.get(run.id, [])
+        step_map = step_maps_by_run.get(run.id, {})
+
+        def _step(run_step: RunStep):
+            return step_map.get(run_step.seq) or step_map.get(run_step.step_id)
+
         data["progress"] = {
             "total": run.total_steps or (process.step_count if process else 0),
             "done": sum(1 for item in items if item.status in ("ok", "retried", "skipped")),
@@ -44,8 +50,8 @@ def board_snapshot(db) -> dict:
                     "status": item.status,
                     "attempt": item.attempt,
                     "duration_ms": item.duration_ms,
-                    "target_desc": step_map[item.step_id].target_desc if item.step_id in step_map else "",
-                    "action": step_map[item.step_id].action if item.step_id in step_map else "",
+                    "target_desc": (step.target_desc if (step := _step(item)) else ""),
+                    "action": (step.action if (step := _step(item)) else ""),
                     "locator_used": item.locator_used,
                     "error_code": item.error_code,
                 }

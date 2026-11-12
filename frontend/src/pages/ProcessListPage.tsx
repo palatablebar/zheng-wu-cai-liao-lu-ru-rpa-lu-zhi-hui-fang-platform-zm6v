@@ -109,6 +109,16 @@ export default function ProcessListPage() {
                     <StatusLamp tone={STATUS_TONE[process.status]} />
                     {PROCESS_STATUS_LABELS[process.status]}
                   </span>
+                  {(process.pending_recording_count ?? 0) > 0 ? (
+                    <span className="chip danger" style={{ marginLeft: 6 }}>
+                      录制候选待审 ×{process.pending_recording_count}
+                    </span>
+                  ) : null}
+                  {process.pending_version ? (
+                    <span className="chip warn" style={{ marginLeft: 6 }}>
+                      待发布 v{process.pending_version.version}
+                    </span>
+                  ) : null}
                 </div>
                 <div>
                   <div className="tiny muted">{process.step_count} 步 · 成功率 {formatPercent(process.success_rate)}</div>

@@ -12,6 +12,7 @@ from src.models.process import Process
 from src.models.run import Run
 from src.models.run_step import RunStep
 from src.models.step import Step
+from src.services import version_service
 from src.services.executor import execute_run_task
 from src.services.serializers import intervention_out, run_out, run_step_out
 from src.utils.errors import AppError
@@ -51,15 +52,24 @@ def create_run(db, actor, process_id: int, material_id: int, trigger: str) -> di
             raise AppError(409, "E_CONCURRENCY_CONFLICT",
                            f"该公司已有进行中的运行 {active.run_code}（同一材料仅允许 1 个并发 run）")
 
+    # 正式运行固化当前 published 版本：历史流程惰性补齐基线快照，
+    # 之后即使发布新版本，本次运行仍按该快照执行。
+    bound_version = None
+    if not dry_run:
+        bound_version = version_service.ensure_baseline_snapshot(db, process)
+        if bound_version is None:
+            raise AppError(422, "PROCESS_NOT_PUBLISHED", "流程没有已发布版本快照，不能发起正式运行")
+        db.flush()
+
     run = Run(
         run_code=_new_run_code(),
         process_id=process.id,
-        process_version=process.version,
+        process_version=bound_version.version if bound_version else process.version,
         material_id=material.id,
         robot_name="SU-BOT-01",
         trigger=trigger,
         status=RunStatus.QUEUED.value,
-        total_steps=process.step_count,
+        total_steps=len(bound_version.steps_snapshot) if bound_version else process.step_count,
         active_lock=None if dry_run else str(material.id),
     )
     db.add(run)
@@ -110,8 +120,7 @@ def run_entities(db, run_id: int) -> tuple[Run, Process, Material]:
 def run_detail(db, run_id: int) -> dict:
     run, process, material = run_entities(db, run_id)
     run_steps = db.scalars(select(RunStep).where(RunStep.run_id == run_id).order_by(RunStep.seq)).all()
-    step_map = {step.id: step for step in db.scalars(
-        select(Step).where(Step.process_id == run.process_id)).all()}
+    step_map = version_service.step_view_map_for_run(db, run)
     interventions = db.scalars(
         select(Intervention).where(Intervention.run_id == run_id).order_by(Intervention.id)).all()
     data = run_out(run)
@@ -120,11 +129,16 @@ def run_detail(db, run_id: int) -> dict:
     data["company_name"] = material.company_name if material else ""
     data["credit_code"] = material.credit_code if material else ""
     data["credit_valid"] = bool(material.credit_valid) if material else False
-    data["run_steps"] = [run_step_out(item, step_map.get(item.step_id)) for item in run_steps]
+
+    def _resolve_step(run_step: RunStep):
+        # 版本快照以 seq 作为步骤标识；历史运行回退按工作区 step_id 查找
+        return step_map.get(run_step.seq) or step_map.get(run_step.step_id)
+
+    data["run_steps"] = [run_step_out(item, _resolve_step(item)) for item in run_steps]
     data["interventions"] = [
         intervention_out(item, run=run, process=process, material=material,
                          run_step=next((rs for rs in run_steps if rs.id == item.run_step_id), None),
-                         step=next((step_map.get(rs.step_id) for rs in run_steps
+                         step=next((_resolve_step(rs) for rs in run_steps
                                     if rs.id == item.run_step_id), None))
         for item in interventions
     ]

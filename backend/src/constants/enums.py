@@ -20,6 +20,35 @@ class ProcessStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class ProcessVersionStatus(str, Enum):
+    """流程版本快照状态：待发布 → 已发布；被新版本替换的已发布快照标记 superseded。"""
+
+    PENDING_REVIEW = "pending_review"
+    PENDING_PUBLISH = "pending_publish"
+    PUBLISHED = "published"
+    SUPERSEDED = "superseded"
+    REJECTED = "rejected"
+
+
+class RecordingStatus(str, Enum):
+    """录制批次状态：候选待审 → 已确认（生成待发布版本）/ 已驳回 / 已撤回。"""
+
+    PENDING_REVIEW = "pending_review"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+    DISCARDED = "discarded"
+
+
+class DiffType(str, Enum):
+    """录制相对当前生效版本的差异分类。"""
+
+    ADDED = "added"
+    MISSING = "missing"
+    SUSPECTED_MISALIGN = "suspected_misalign"
+    UPDATED = "updated"
+    UNCHANGED = "unchanged"
+
+
 class StepAction(str, Enum):
     CLICK = "click"
     INPUT = "input"

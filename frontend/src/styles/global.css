@@ -399,3 +399,35 @@ h1, h2, h3, h4, p { margin: 0; }
   .stat-cell { flex-basis: 50%; }
   .rowitem { grid-template-columns: 1fr !important; }
 }
+
+/* 录制候选审阅：差异清单表格 */
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.diff-table th,
+.diff-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid oklch(0.32 0.02 165 / 0.45);
+  vertical-align: top;
+}
+.diff-table th {
+  color: var(--faint);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.diff-table tr.row-danger {
+  background: oklch(0.632 0.198 28 / 0.08);
+}
+.diff-table tr.row-danger td:first-child .chip {
+  border-color: oklch(0.632 0.198 28 / 0.55);
+}
+.diff-table input[type="checkbox"] {
+  accent-color: var(--amber);
+  width: 14px;
+  height: 14px;
+}

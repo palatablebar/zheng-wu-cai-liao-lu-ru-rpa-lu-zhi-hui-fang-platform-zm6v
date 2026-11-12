@@ -29,6 +29,76 @@ export interface LocatorScore extends LocatorCandidate {
 export type StepAction = 'click' | 'input' | 'upload' | 'assert' | 'wait';
 export type RiskLevel = 'low' | 'medium' | 'high';
 
+export type DiffType = 'added' | 'missing' | 'suspected_misalign' | 'updated' | 'unchanged';
+export type RecordingStatus = 'pending_review' | 'confirmed' | 'rejected' | 'discarded';
+export type ProcessVersionStatus =
+  | 'pending_review' | 'pending_publish' | 'published' | 'superseded' | 'rejected';
+
+export interface RecordingDiffItem {
+  type: DiffType;
+  seq: number | null;
+  field_name: string;
+  action: string;
+  sample_value: string;
+  selector: string;
+  baseline_seq: number | null;
+  baseline_field_name: string;
+  baseline_action: string;
+  baseline_selector: string;
+  reasons: string[];
+  review_status: string;
+  confirmed_by?: string;
+}
+
+export interface RecordingDiffSummary {
+  total: number;
+  added: number;
+  missing: number;
+  suspected_misalign: number;
+  updated: number;
+  unchanged: number;
+  requires_manual_confirmation: boolean;
+}
+
+export interface ProcessVersionInfo {
+  id: number;
+  process_id: number;
+  version: number;
+  status: ProcessVersionStatus;
+  change_note: string;
+  source_recording_id: number | null;
+  step_count: number;
+  review_summary: RecordingDiffSummary | Record<string, never>;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  published_at: string | null;
+  created_at: string | null;
+}
+
+export interface RecordingImport {
+  id: number;
+  process_id: number;
+  status: RecordingStatus;
+  replace: boolean;
+  content_fingerprint: string;
+  raw_steps: Record<string, unknown>[];
+  diff_items: RecordingDiffItem[];
+  diff_summary: RecordingDiffSummary;
+  version_id: number | null;
+  note: string;
+  created_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+}
+
+export interface RecordingImportResult {
+  recording: RecordingImport;
+  deduplicated: boolean;
+  message?: string;
+  version?: ProcessVersionInfo;
+}
+
 export interface Step {
   id: number;
   process_id: number;
@@ -63,6 +133,11 @@ export interface ProcessItem {
   created_at?: string;
   steps?: Step[];
   risk_summary?: { high: number; medium: number; low: number };
+  active_version?: ProcessVersionInfo | null;
+  pending_version?: ProcessVersionInfo | null;
+  versions?: ProcessVersionInfo[];
+  pending_recordings?: RecordingImport[];
+  pending_recording_count?: number;
 }
 
 export interface Material {

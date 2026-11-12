@@ -4,7 +4,13 @@ from sqlalchemy.orm import Session
 from src.config.database import get_db
 from src.controllers import process_controller
 from src.middlewares.rbac import ADMIN, ADMIN_ENGINEER, ALL_ROLES, require_roles
-from src.schemas.process import ProcessActionRequest, StepImportRequest, StepUpdateRequest
+from src.schemas.process import (
+    ProcessActionRequest,
+    RecordingConfirmRequest,
+    RecordingRejectRequest,
+    StepImportRequest,
+    StepUpdateRequest,
+)
 from src.schemas.run import RunCreateRequest
 
 router = APIRouter(prefix="/processes", tags=["processes"])
@@ -24,8 +30,9 @@ def get_process(process_id: int, db: Session = Depends(get_db),
 
 @router.put("/{process_id}/steps/{step_id}")
 def update_step(process_id: int, step_id: int, payload: StepUpdateRequest,
-                db: Session = Depends(get_db), _: dict = Depends(require_roles(*ADMIN_ENGINEER))):
-    return process_controller.update_step(db, process_id, step_id, payload.model_dump(exclude_unset=True))
+                db: Session = Depends(get_db), user: dict = Depends(require_roles(*ADMIN_ENGINEER))):
+    return process_controller.update_step(db, user, process_id, step_id,
+                                          payload.model_dump(exclude_unset=True))
 
 
 @router.post("/{process_id}/rescore")
@@ -40,6 +47,12 @@ def publish(process_id: int, payload: ProcessActionRequest | None = None,
     return process_controller.publish(db, process_id, (payload.note if payload else ""))
 
 
+@router.post("/{process_id}/reject-pending")
+def reject_pending(process_id: int, payload: RecordingRejectRequest | None = None,
+                   db: Session = Depends(get_db), user: dict = Depends(require_roles(*ADMIN))):
+    return process_controller.reject_pending(db, user, process_id, (payload.note if payload else ""))
+
+
 @router.post("/{process_id}/archive")
 def archive(process_id: int, payload: ProcessActionRequest | None = None,
             db: Session = Depends(get_db), _: dict = Depends(require_roles(*ADMIN))):
@@ -48,8 +61,37 @@ def archive(process_id: int, payload: ProcessActionRequest | None = None,
 
 @router.post("/{process_id}/import")
 def import_steps(process_id: int, payload: StepImportRequest, db: Session = Depends(get_db),
-                 _: dict = Depends(require_roles(*ADMIN_ENGINEER))):
-    return process_controller.import_steps(db, process_id, payload.steps, payload.replace)
+                 user: dict = Depends(require_roles(*ADMIN_ENGINEER))):
+    return process_controller.import_steps(db, user, process_id, payload.steps, payload.replace)
+
+
+@router.get("/{process_id}/recordings")
+def list_recordings(process_id: int, status: str | None = Query(default=None),
+                    db: Session = Depends(get_db),
+                    _: dict = Depends(require_roles(*ALL_ROLES))):
+    return process_controller.list_recordings(db, process_id, status)
+
+
+@router.get("/recordings/{recording_id}")
+def get_recording(recording_id: int, db: Session = Depends(get_db),
+                  _: dict = Depends(require_roles(*ALL_ROLES))):
+    return process_controller.get_recording(db, recording_id)
+
+
+@router.post("/recordings/{recording_id}/confirm")
+def confirm_recording(recording_id: int, payload: RecordingConfirmRequest,
+                      db: Session = Depends(get_db),
+                      user: dict = Depends(require_roles(*ADMIN_ENGINEER))):
+    return process_controller.confirm_recording(
+        db, user, recording_id, payload.confirmed_misalign_seqs, payload.note)
+
+
+@router.post("/recordings/{recording_id}/reject")
+def reject_recording(recording_id: int, payload: RecordingRejectRequest | None = None,
+                     db: Session = Depends(get_db),
+                     user: dict = Depends(require_roles(*ADMIN_ENGINEER))):
+    return process_controller.reject_recording(db, user, recording_id,
+                                               (payload.note if payload else ""))
 
 
 @router.post("/{process_id}/dry-run")

@@ -48,9 +48,10 @@ docker compose exec backend python -m scripts.seed_demo
 | 页面 | 路径 | 说明 |
 |---|---|---|
 | 登录 | `/login` | 三角色演示账号，一键填入 |
-| 流程库 | `/processes` | 4 个流程（年报 9 步 / 资质 7 步 / 补贴 8 步 / 变更 8 步） |
-| 步骤编辑器 | `/processes/:id/edit` | 左侧步骤灯列 + 右侧定位器候选与稳健分、断言/重试配置、干跑 |
-| 值守看板 | `/board` | 队列、进行中 run 步骤灯、失败高亮，2s 轮询 |
+| 流程库 | `/processes` | 4 个流程（年报 9 步 / 资质 7 步 / 补贴 8 步 / 变更 8 步），待审候选/待发布版本角标 |
+| 步骤编辑器 | `/processes/:id/edit` | 左侧步骤灯列 + 右侧定位器候选与稳健分、断言/重试配置、干跑；含「导入录制（候选审阅）」与版本切换 |
+| 录制候选审阅 | `/processes/recordings/:id` | 按字段名称/动作/样例值列出新增、缺失、疑似错位；疑似错位逐条人工确认 |
+| 值守看板 | `/board` | 队列、进行中 run 步骤灯、失败高亮，2s 轮询（步骤按运行绑定版本解析） |
 | 运行详情 | `/runs/:id` | 步骤时间线、命中定位器、幂等键、接管记录、日志、报告导出 |
 | 接管队列 | `/interventions` | 重试 / 改定位器 / 跳过 / 终止；viewer 403 |
 | 材料库 | `/materials` | GB 32100 信用代码校验位真算，2 条非法标红且不能发起申报 |
@@ -69,6 +70,27 @@ docker compose exec backend python -m scripts.seed_demo
   `steps.locator_scores / robustness_score / risk_level / risk_reason`。
 - **失败态**：无历史 → `score=50`, `reason=no_history`（seed 中变更流程即为此态）。
 - **可复现**：`POST /api/processes/{id}/rescore` 按当前历史确定重算。
+
+### 算法 C：录制候选化审阅 + 版本快照切换
+
+针对「页面改版后『法人姓名』被录到相邻『经办人姓名』，稳健分仍认可、发布后材料悄悄填错」的风险：
+
+- **导入即候选，不动正式流程**：`POST /api/processes/{id}/import` 不再直接写步骤，
+  而是生成 `recording_imports` 批次（`recording_service.py`），与当前**已发布版本快照**做差异分析
+  （`recording_diff.py`），按**字段名称、动作、样例值**输出五类差异：
+  `added`（新增）/ `missing`（缺失）/ `suspected_misalign`（疑似错位）/ `updated`（更新）/ `unchanged`。
+- **疑似错位判定**：同序号录入类字段名称对不上且无同名承接；定位器语义命中其他字段
+  （如 `field-agent` 映射「经办人」，含中英关键词映射表）；依赖 `nth-child`/兄弟轴等相邻结构。
+  旧字段若从录制消失同时计入 `missing`。
+- **人工确认门禁**：`suspected_misalign` 必须逐条勾选确认，否则 `confirm` 返回 422
+  `MISALIGN_NOT_CONFIRMED`；确认前正式运行始终引用原 published 快照。
+- **不可变版本 + 原子切换**：确认后生成 `process_versions` 的 `pending_publish` 快照；
+  发布时候选转 `published`、旧版本转 `superseded`、工作区步骤同步替换，整条流程一次切换。
+- **运行绑定版本**：`runs.process_version` 在创建时固化，执行器（`executor.load_run_steps`）
+  始终按该版本的 `steps_snapshot` 回放；后续发布不影响已启动/历史运行，看板/接管/报告同样按绑定版本解析。
+- **幂等导入**：录制内容（含 replace 标志）做 sha256 指纹，同一份录制重复导入复用原批次、不新增版本；
+  已驳回/撤回的批次不参与去重，允许修正后重新导入。
+- **冻结期保护**：存在待发布版本时工作区步骤冻结（编辑/评分/再导入均 409），需先发布或驳回。
 
 ### 算法 B：步骤 DAG 调度 + 断点续跑 / 失败接管 `backend/src/services/executor.py`
 
@@ -155,6 +177,8 @@ DB_HOST=127.0.0.1 DB_PORT=17737 uvicorn src.main:app --reload --port 19237
 celery -A src.config.celery_app worker -l info --concurrency=2
 # 前端
 cd frontend && npm install --registry=https://registry.npmjs.org && npm run dev
+# 后端测试（SQLite 内存库，无需 MySQL/Redis）
+cd backend && python -m unittest discover -s tests
 ```
 
 ## License

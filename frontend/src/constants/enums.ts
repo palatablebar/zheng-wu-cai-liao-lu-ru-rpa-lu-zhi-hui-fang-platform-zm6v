@@ -61,6 +61,29 @@ export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
   high: '高风险',
 };
 
+export const DIFF_TYPE_LABELS: Record<string, string> = {
+  added: '新增',
+  missing: '缺失',
+  suspected_misalign: '疑似错位',
+  updated: '有更新',
+  unchanged: '未变化',
+};
+
+export const RECORDING_STATUS_LABELS: Record<string, string> = {
+  pending_review: '待人工审阅',
+  confirmed: '已确认待发布',
+  rejected: '已驳回',
+  discarded: '候选已撤回',
+};
+
+export const PROCESS_VERSION_STATUS_LABELS: Record<string, string> = {
+  pending_review: '待审阅',
+  pending_publish: '待发布',
+  published: '生效中',
+  superseded: '已失效',
+  rejected: '已驳回',
+};
+
 export const INTERVENTION_REASON_LABELS: Record<string, string> = {
   assert_failed: '断言失败',
   locator_drift: '定位漂移',

@@ -9,7 +9,7 @@ from src.models.material import Material
 from src.models.process import Process
 from src.models.run import Run
 from src.models.run_step import RunStep
-from src.models.step import Step
+from src.services import version_service
 from src.services.executor import execute_run_task
 from src.services.serializers import intervention_out, run_out
 from src.utils.errors import AppError
@@ -22,7 +22,10 @@ def _bundle(db, intervention: Intervention) -> dict:
     process = db.get(Process, run.process_id) if run else None
     material = db.get(Material, run.material_id) if run else None
     run_step = db.get(RunStep, intervention.run_step_id)
-    step = db.get(Step, run_step.step_id) if run_step else None
+    step = None
+    if run_step is not None and run is not None:
+        step_map = version_service.step_view_map_for_run(db, run)
+        step = step_map.get(run_step.seq) or step_map.get(run_step.step_id)
     return intervention_out(intervention, run=run, process=process, material=material,
                             run_step=run_step, step=step)
 

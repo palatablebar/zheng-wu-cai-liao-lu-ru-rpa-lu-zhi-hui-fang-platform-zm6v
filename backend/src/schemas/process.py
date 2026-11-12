@@ -24,5 +24,15 @@ class StepImportRequest(BaseModel):
     replace: bool = False
 
 
+class RecordingConfirmRequest(BaseModel):
+    # 疑似错位项的序号（diff_items 中 type=suspected_misalign 的 seq），必须逐条人工确认
+    confirmed_misalign_seqs: list[int] = Field(default_factory=list)
+    note: str = ""
+
+
+class RecordingRejectRequest(BaseModel):
+    note: str = ""
+
+
 class ProcessActionRequest(BaseModel):
     note: str = ""

@@ -26,8 +26,40 @@ from src.models.process import Process
 from src.models.run import Run
 from src.models.run_step import RunStep
 from src.models.step import Step
+from src.services import version_service
 
 ATTEMPT_RETRY_BASE_SECONDS = 1
+
+
+class SnapshotStep:
+    """不可变版本快照中的步骤，接口与 Step 模型对齐，供调度/执行逻辑无差别使用。
+
+    id 与 seq 都取快照内序号：版本化运行的 RunStep 以 (run_id, step_id=seq) 关联，
+    幂等键包含 run_id，与工作区 Step 主键天然隔离，不会串数据。
+    """
+
+    def __init__(self, snapshot: dict):
+        self.seq = int(snapshot["seq"])
+        self.id = self.seq
+        self.action = snapshot.get("action", "click")
+        self.target_desc = snapshot.get("target_desc", "")
+        self.locator_candidates = snapshot.get("locator_candidates") or []
+        self.depends_on = snapshot.get("depends_on") or []
+        self.assert_rule = snapshot.get("assert_rule")
+        self.max_retries = int(snapshot.get("max_retries", 2))
+        self.timeout_ms = int(snapshot.get("timeout_ms", 15000))
+        self.robustness_score = float(snapshot.get("robustness_score", 50.0))
+        self.risk_level = snapshot.get("risk_level", "medium")
+
+
+def load_run_steps(db, run: Run) -> list:
+    """按运行启动时绑定的 process_version 读取步骤；历史运行/草稿干跑回退工作区步骤表。"""
+    version = version_service.load_version_for_run(db, run)
+    if version is not None:
+        return [SnapshotStep(item) for item in (version.steps_snapshot or [])]
+    return list(db.scalars(
+        select(Step).where(Step.process_id == run.process_id).order_by(Step.seq)
+    ).all())
 
 
 class StepResult:
@@ -212,7 +244,7 @@ def _execute(db, run: Run, dry_run: bool) -> None:
         _finish(db, run, RunStatus.FAILED.value)
         return
 
-    steps = db.scalars(select(Step).where(Step.process_id == run.process_id).order_by(Step.seq)).all()
+    steps = load_run_steps(db, run)
     try:
         ordered = kahn_topological_order(list(steps))
     except ValueError as exc:

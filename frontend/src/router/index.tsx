@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth';
 import LoginPage from '../pages/LoginPage';
 import ProcessListPage from '../pages/ProcessListPage';
 import StepEditorPage from '../pages/StepEditorPage';
+import RecordingReviewPage from '../pages/RecordingReviewPage';
 import BoardPage from '../pages/BoardPage';
 import RunDetailPage from '../pages/RunDetailPage';
 import InterventionPage from '../pages/InterventionPage';
@@ -33,6 +34,7 @@ export function AppRoutes() {
         <Route path="/" element={<Navigate to="/processes" replace />} />
         <Route path="/processes" element={<ProcessListPage />} />
         <Route path="/processes/:processId/edit" element={<StepEditorPage />} />
+        <Route path="/processes/recordings/:recordingId" element={<RecordingReviewPage />} />
         <Route path="/board" element={<BoardPage />} />
         <Route path="/runs/:runId" element={<RunDetailPage />} />
         <Route path="/interventions" element={<InterventionPage />} />

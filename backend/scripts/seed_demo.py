@@ -398,6 +398,12 @@ def seed() -> dict:
             process.success_rate = round(sum(1 for run in run_rows if run.status == "succeeded") / total, 4) if total else 0.0
         db.commit()
 
+        # 为已发布流程补齐不可变版本快照（幂等）：运行按版本绑定，历史运行可继续回放
+        from src.services import version_service
+        for process in db.scalars(select(Process)).all():
+            version_service.ensure_baseline_snapshot(db, process)
+        db.commit()
+
         counts = {
             "processes": len(db.scalars(select(Process)).all()),
             "steps": len(db.scalars(select(Step)).all()),
